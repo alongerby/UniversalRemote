@@ -1,26 +1,59 @@
 #include <Arduino.h>
+#include <NimBLEDevice.h>
+
 #include <IRremoteESP8266.h>
 #include <IRsend.h>
 #include <ir_Gree.h>
+#include <IRrecv.h>
+#include <IRutils.h>
 
-const uint16_t kIrTxPin = 4;   // DAT pin
+// ----- BLE UUIDs (Nordic UART-style) -----
+static NimBLEUUID kSvcUUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
+static NimBLEUUID kRxUUID ("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"); // Write
+static NimBLEUUID kTxUUID ("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"); // Notify
+
+// ----- IR pins -----
+const uint16_t kIrTxPin = 4;   // your TX module DAT pin
+const uint16_t kIrRxPin = 21;  // receiver OUT pin
+
+// ----- IR objects -----
 IRGreeAC ac(kIrTxPin);
+IRrecv irrecv(kIrRxPin);
+decode_results results;
 
-String line;
+// ----- BLE -----
+NimBLECharacteristic* txChar = nullptr;
 
-void setup() {
-  Serial.begin(115200);
-  delay(2000); // let the port settle
-  ac.begin();
-  Serial.println("\nReady. Type ON or OFF, then press Enter.");
+// Overload for const char*
+static inline void notifyMessage(const char* msg) {
+  if (!txChar) return;
+  txChar->setValue((const uint8_t*)msg, strlen(msg)); // explicit length
+  txChar->notify();
 }
 
-void sendState() {
+// Overload for Arduino String
+static inline void notifyMessage(const String& s) {
+  notifyMessage(s.c_str());
+}
+
+// Overload for std::string
+static inline void notifyMessage(const std::string& s) {
+  if (!txChar) return;
+  txChar->setValue((const uint8_t*)s.data(), s.size()); // handles embedded NULs too
+  txChar->notify();
+}
+
+static void sendState() {
   ac.send();
-  Serial.println("IR sent.");
+  notifyMessage("IR SENT");
 }
 
-void processCmd(const String& s) {
+static void processCmd(const std::string &sraw) {
+  // normalize to uppercase ASCII without CR/LF
+  String s;
+  for (char c : sraw) if (c >= 32 && c <= 126) s += c;
+  s.trim(); s.toUpperCase();
+
   if (s == "ON") {
     ac.on();
     sendState();
@@ -28,31 +61,79 @@ void processCmd(const String& s) {
     ac.off();
     sendState();
   } else {
-    Serial.println("Unknown. Use ON or OFF.");
+    notifyMessage("Unknown. Use ON or OFF.");
   }
 }
 
+struct RxCallbacks : public NimBLECharacteristicCallbacks {
+  void onWrite(NimBLECharacteristic* ch) override {
+    std::string data = ch->getValue();
+    if (!data.empty() && txChar) {
+      notifyMessage("Received");
+      processCmd(data);
+    }
+  }
+};
+
+void setup() {
+  Serial.begin(115200);
+  delay(200);
+
+  // ---- IR TX defaults ----
+  ac.begin();
+  ac.on();
+  ac.setMode(kGreeCool);
+  ac.setTemp(24);
+  ac.setFan(kGreeFanAuto);
+
+  // ---- IR RX start ----
+  irrecv.enableIRIn();   // start the receiver
+
+  // ---- BLE ----
+  NimBLEDevice::init("ESP32-BLE-IR");
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+
+  auto* server = NimBLEDevice::createServer();
+  auto* svc    = server->createService(kSvcUUID);
+
+  // TX (notify to phone)
+  txChar = svc->createCharacteristic(kTxUUID, NIMBLE_PROPERTY::NOTIFY);
+
+  // RX (writes from phone)
+  auto* rxChar = svc->createCharacteristic(
+      kRxUUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+  rxChar->setCallbacks(new RxCallbacks());
+
+  svc->start();
+
+  auto* adv = NimBLEDevice::getAdvertising();
+  adv->addServiceUUID(kSvcUUID);
+  adv->setScanResponse(true);
+  adv->start();
+
+  Serial.println("BLE + IR RX/TX ready.");
+}
+
 void loop() {
-  while (Serial.available()) {
-    char c = (char)Serial.read();
-    Serial.print(c);
-    if (c == '\r') {
-      continue;
+  // Poll the IR receiver and report concise info over BLE
+  if (irrecv.decode(&results)) {
+    String protoStr = typeToString(results.decode_type); // Arduino String
+    char line[64];
+
+    if (results.bits <= 32) {
+      snprintf(line, sizeof(line), "RX %s 0x%08lX (%d)",
+              protoStr.c_str(),
+              (unsigned long)results.value,
+              results.bits);
+    } else {
+      snprintf(line, sizeof(line), "RX %s (%d bits)",
+              protoStr.c_str(),
+              results.bits);
     }
-    if(c == '\n'){
-      line.trim();
-      if(line == "ON"){
-        Serial.print("HERE");
-        Serial.println("ON");
-        processCmd(line);
-      }
-      if(line == "OFF"){
-        Serial.println("OFF");
-        processCmd(line);
-      }
-      line = "";
-    }else{
-      line += c;
-    }
+
+    Serial.println(line);
+    notifyMessage(line);   // now OK with the overloads above
+
+    irrecv.resume();
   }
 }
