@@ -28,7 +28,8 @@ static void processCmd(const std::string &sraw) {
   // normalize to uppercase ASCII without CR/LF
   String s;
   for (char c : sraw) if (c >= 32 && c <= 126) s += c;
-  s.trim(); s.toUpperCase();
+  s.trim();
+  s.toUpperCase();
 
   if (s == "ON") {
     ac.on();
@@ -46,14 +47,15 @@ struct RxCallbacks : public NimBLECharacteristicCallbacks {
     std::string data = ch->getValue();
     if (!data.empty() && txChar) {
       notifyMessage("Received", txChar);
-      processCmd(data);
+      notifyMessage(data, txChar);
+      sendAcCmd(data, ac);
     }
   }
 };
 
 void setup() {
   Serial.begin(115200);
-  delay(200);
+  delay(2000);
 
   // ---- IR TX defaults ----
   ac.begin();
@@ -62,8 +64,8 @@ void setup() {
   ac.setTemp(24);
   ac.setFan(kGreeFanAuto);
 
-  // ---- IR RX start ----
-  irrecv.enableIRIn();   // start the receiver
+  // // ---- IR RX start ----
+  // irrecv.enableIRIn();   // start the receiver
 
   // ---- BLE ----
   NimBLEDevice::init("ESP32-BLE-IR");
@@ -92,24 +94,24 @@ void setup() {
 
 void loop() {
   // Poll the IR receiver and report concise info over BLE
-  if (irrecv.decode(&results)) {
-    String protoStr = typeToString(results.decode_type); // Arduino String
-    char line[64];
+  // if (irrecv.decode(&results)) {
+  //   String protoStr = typeToString(results.decode_type); // Arduino String
+  //   char line[64];
 
-    if (results.bits <= 32) {
-      snprintf(line, sizeof(line), "RX %s 0x%08lX (%d)",
-              protoStr.c_str(),
-              (unsigned long)results.value,
-              results.bits);
-    } else {
-      snprintf(line, sizeof(line), "RX %s (%d bits)",
-              protoStr.c_str(),
-              results.bits);
-    }
+  //   if (results.bits <= 32) {
+  //     snprintf(line, sizeof(line), "RX %s 0x%08lX (%d)",
+  //             protoStr.c_str(),
+  //             (unsigned long)results.value,
+  //             results.bits);
+  //   } else {
+  //     snprintf(line, sizeof(line), "RX %s (%d bits)",
+  //             protoStr.c_str(),
+  //             results.bits);
+  //   }
 
-    Serial.println(line);
-    notifyMessage(line, txChar);   // now OK with the overloads above
+  //   Serial.println(line);
+  //   notifyMessage(line, txChar);   // now OK with the overloads above
 
-    irrecv.resume();
-  }
+  //   irrecv.resume();
+  // }
 }

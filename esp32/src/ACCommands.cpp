@@ -25,7 +25,7 @@ namespace ACCommands {
     }
 
     // POWER | MODE | FAN | TEMP C |
-    bool buildAcCommand(IRGreeAC& ac, JsonObjectConst obj, String& err){
+    void buildAcCommand(IRGreeAC& ac, JsonObjectConst obj){
       // POWER
       String cmd = obj["cmd"] | "";
       cmd.toUpperCase();
@@ -46,6 +46,24 @@ namespace ACCommands {
       temp = std::max(temp, kGreeMinTempC);
       temp = std::min(temp, kGreeMaxTempC);
       ac.setTemp(temp);
+    }
+
+    void sendAcCmd(std::string data, IRGreeAC &ac){
+      if(data == "OFF"){
+        ac.off();
+        ac.send();
+        return;
+      }
+      JsonDocument doc;
+      DeserializationError err = deserializeJson(doc, data);
+      if (err) {
+        Serial.print("JSON parse failed: ");
+        Serial.println(err.c_str());
+        return;
+      }
+      JsonObjectConst obj = doc.as<JsonObjectConst>();
+      buildAcCommand(ac, obj);
+      ac.send();
     }
     
 

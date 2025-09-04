@@ -3,6 +3,7 @@
 #include <string>
 #include <ir_Gree.h>
 #include <NimBLEDevice.h>
+#include <ArduinoJson.h>
 
 namespace ACCommands {
   // --- Notify helpers ---
@@ -14,4 +15,6 @@ namespace ACCommands {
 
   // --- IR helpers ---
   void sendState(IRGreeAC& ac, NimBLECharacteristic *txChar);
+  void buildAcCommand(IRGreeAC& ac, JsonObjectConst obj);
+  void sendAcCmd(std::string data, IRGreeAC &ac);
 }

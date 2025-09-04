@@ -8,6 +8,8 @@
 	<string>This app uses Bluetooth to connect to your ESP32.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Needed to discover and connect to your ESP32 on the local network.</string>
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_mqtt._tcp.</string>

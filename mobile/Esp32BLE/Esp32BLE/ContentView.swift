@@ -1,41 +1,268 @@
-//
-//  ContentView.swift
-//  Esp32BLE
-//
-//  Created by Alon Gerby on 01/09/2025.
-//
-
 import SwiftUI
+import CoreBluetooth
 
 struct ContentView: View {
     @StateObject private var ble = BluetoothManager()
+    @State private var customMsg = ""
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text(ble.status).font(.footnote).foregroundStyle(.secondary)
+        NavigationStack {
+            VStack(spacing: 12) {
+                StatusBar(text: ble.status, connected: ble.connected != nil)
 
-            HStack {
-                Button("Scan") { ble.startScan() }.buttonStyle(.borderedProminent)
-                Button("Stop") { ble.stopScan() }.buttonStyle(.bordered)
-            }
+                ControlsBar(
+                    isConnected: ble.connected != nil,
+                    onScan: ble.startScan,
+                    onStop: ble.stopScan,
+                    onDisconnect: { ble.disconnect() }
+                )
 
-            List(ble.devices, id: \.identifier) { p in
-                Button(action: { ble.connect(p) }) {
-                    HStack {
-                        Text(p.name ?? "Unnamed")
-                        Spacer()
-                        Text(p.identifier.uuidString.prefix(8) + "…").foregroundStyle(.secondary)
-                    }
+                List {
+                    DevicesSection(
+                        devices: ble.devices,
+                        connectedId: ble.connected?.identifier,
+                        onConnect: ble.connect
+                    )
+
+                    CommandsSection(
+                        customMsg: $customMsg,
+                        onOn: { ble.sendMsg("ON") },
+                        onOff: { ble.sendMsg("OFF") },
+                        onSend: { msg in ble.sendMsg(msg, appendNewline: true) }
+                    )
                 }
+                .listStyle(.insetGrouped)
             }
-
-            HStack {
-                Button("ON") { ble.sendMsg("ON") }
-                Button("OFF") { ble.sendMsg("OFF") }
-            }
-            .buttonStyle(.borderedProminent)
+            .padding(.horizontal, 8)
+            .navigationTitle("ESP32 Remote")
         }
-        .padding()
     }
 }
 
+// MARK: - Sections / Components
+
+private enum ACMode: Int, CaseIterable, Identifiable {
+    case cool = 1
+    case hot = 4
+    var id: Self { self }
+    var label: String {
+        switch self {
+        case .cool: "Cool"
+        case .hot: "Hot"
+        }
+    }
+    var intValue: Int { rawValue }
+}
+
+private enum ACFan: Int, CaseIterable, Identifiable {
+    case auto = 0
+    case min = 1
+    case med = 2
+    case max = 3
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .auto: "Auto"
+        case .min:  "Min"
+        case .med:  "Mid"
+        case .max:  "Max"
+        }
+    }
+
+    var intValue: Int { rawValue }
+}
+
+private struct CommandsSection: View {
+    @Binding var customMsg: String
+    let onOn: () -> Void
+    let onOff: () -> Void
+    let onSend: (String) -> Void
+
+    @State private var showAC = false
+    @State private var temp: Int = 24
+    @State private var mode: ACMode = .cool
+    @State private var fan: ACFan = .auto
+
+    var body: some View {
+        Section("Commands") {
+            // Power row
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation { showAC.toggle() }
+                } label: {
+                    Label("AC", systemImage: showAC ? "chevron.down.circle.fill" : "chevron.right.circle")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(Primary())
+                .accessibilityLabel("Toggle AC options")
+            }
+
+            // Collapsible AC panel (in place)
+            if showAC {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Air Conditioner").font(.headline)
+
+                    // Temp
+                    HStack {
+                        Label("Temp", systemImage: "thermometer")
+                        Spacer()
+                        Text("\(temp)°C")
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    Slider(
+                        value: Binding(get: { Double(temp) }, set: { temp = Int($0) }),
+                        in: 16...30, step: 1
+                    )
+
+                    // Mode
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Mode", systemImage: "snowflake")
+                        Picker("Mode", selection: $mode) {
+                            ForEach(ACMode.allCases) { m in Text(m.label).tag(m) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    // Fan
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Fan", systemImage: "wind")
+                        Picker("Fan", selection: $fan) {
+                            ForEach(ACFan.allCases) { f in Text(f.label).tag(f) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    HStack {
+                        Button {
+                            onOff()
+                        } label: {
+                            Label {
+                                Text("Turn Off")
+                            } icon: {
+                                Image(systemName: "power.circle.fill")
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                        .buttonStyle(Primary())
+                        Spacer()
+                        Button {
+                            sendAC()
+                        } label: {
+                            Label("Send", systemImage: "paperplane.fill")
+                        }
+                        .buttonStyle(Primary())
+                    }
+                }
+                .padding(10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+    }
+
+    private func sendAC() {
+        let dict: [String: Any] = [
+            "cmd": "ON",
+            "temp_c": temp,
+            "mode": mode.intValue,
+            "fan": fan.intValue
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: dict),
+           let json = String(data: data, encoding: .utf8) {
+            onSend(json + "\n")
+        }
+    }
+}
+
+
+private struct ControlsBar: View {
+    let isConnected: Bool
+    let onScan: () -> Void
+    let onStop: () -> Void
+    let onDisconnect: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button { onScan() } label: {
+                Label("Scan", systemImage: "dot.radiowaves.left.and.right")
+            }.buttonStyle(Primary())
+            Button("Stop", action: onStop).buttonStyle(Secondary())
+            if isConnected {
+                Button { onDisconnect() } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }.buttonStyle(Destructive())
+            }
+        }
+    }
+}
+
+private struct DevicesSection: View {
+    let devices: [CBPeripheral]
+    let connectedId: UUID?
+    let onConnect: (CBPeripheral) -> Void
+
+    var body: some View {
+        Section("Devices") {
+            ForEach(devices, id: \.identifier) { p in
+                Button { onConnect(p) } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(p.name ?? "Unnamed").fontWeight(.medium)
+                            Text("\(p.identifier.uuidString.prefix(8))…")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if p.identifier == connectedId {
+                            Image(systemName: "link.circle.fill").foregroundStyle(.green)
+                        } else {
+                            Image(systemName: "link").foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+private struct StatusBar: View {
+    let text: String
+    let connected: Bool
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(connected ? .green : .gray).frame(width: 10, height: 10)
+            Text(text).font(.footnote).foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(10)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct Primary: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.blue.opacity(configuration.isPressed ? 0.6 : 0.9),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(.white)
+    }
+}
+private struct Secondary: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+private struct Destructive: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(Color.red.opacity(configuration.isPressed ? 0.6 : 0.9),
+                        in: RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(.white)
+    }
+}

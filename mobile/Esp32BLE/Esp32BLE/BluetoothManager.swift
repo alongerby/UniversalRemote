@@ -47,6 +47,12 @@ final class BluetoothManager: NSObject, ObservableObject {
         central.connect(p, options: nil)
         status = "Connecting to \(p.name ?? "device")…"
     }
+    
+    func disconnect() {
+        if let p = connected {
+            central.cancelPeripheralConnection(p)
+        }
+    }
 
     func sendJSON(_ dict: [String: Any]) {
         guard let p = connected, let tx = txChar else { return }
@@ -61,7 +67,7 @@ final class BluetoothManager: NSObject, ObservableObject {
             return
         }
         var payload = text
-        if appendNewline { payload += "\n" }           // handy if ESP32 reads line-based frames
+        if appendNewline { payload += "\n" } 
 
         guard let data = payload.data(using: .utf8) else {
             status = "UTF-8 encode failed"
