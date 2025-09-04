@@ -7,10 +7,10 @@
 #include <IRrecv.h>
 #include <IRutils.h>
 
-// ----- BLE UUIDs (Nordic UART-style) -----
-static NimBLEUUID kSvcUUID("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
-static NimBLEUUID kRxUUID ("6E400002-B5A3-F393-E0A9-E50E24DCCA9E"); // Write
-static NimBLEUUID kTxUUID ("6E400003-B5A3-F393-E0A9-E50E24DCCA9E"); // Notify
+#include <UUIDs.h>
+#include <ACCommands.h>
+
+using namespace ACCommands;
 
 // ----- IR pins -----
 const uint16_t kIrTxPin = 4;   // your TX module DAT pin
@@ -24,30 +24,6 @@ decode_results results;
 // ----- BLE -----
 NimBLECharacteristic* txChar = nullptr;
 
-// Overload for const char*
-static inline void notifyMessage(const char* msg) {
-  if (!txChar) return;
-  txChar->setValue((const uint8_t*)msg, strlen(msg)); // explicit length
-  txChar->notify();
-}
-
-// Overload for Arduino String
-static inline void notifyMessage(const String& s) {
-  notifyMessage(s.c_str());
-}
-
-// Overload for std::string
-static inline void notifyMessage(const std::string& s) {
-  if (!txChar) return;
-  txChar->setValue((const uint8_t*)s.data(), s.size()); // handles embedded NULs too
-  txChar->notify();
-}
-
-static void sendState() {
-  ac.send();
-  notifyMessage("IR SENT");
-}
-
 static void processCmd(const std::string &sraw) {
   // normalize to uppercase ASCII without CR/LF
   String s;
@@ -56,12 +32,12 @@ static void processCmd(const std::string &sraw) {
 
   if (s == "ON") {
     ac.on();
-    sendState();
+    sendState(ac, txChar);
   } else if (s == "OFF") {
     ac.off();
-    sendState();
+    sendState(ac, txChar);
   } else {
-    notifyMessage("Unknown. Use ON or OFF.");
+    notifyMessage("Unknown. Use ON or OFF.", txChar);
   }
 }
 
@@ -69,7 +45,7 @@ struct RxCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* ch) override {
     std::string data = ch->getValue();
     if (!data.empty() && txChar) {
-      notifyMessage("Received");
+      notifyMessage("Received", txChar);
       processCmd(data);
     }
   }
@@ -94,20 +70,20 @@ void setup() {
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
 
   auto* server = NimBLEDevice::createServer();
-  auto* svc    = server->createService(kSvcUUID);
+  auto* svc = server->createService(UUIDs::Service);
 
   // TX (notify to phone)
-  txChar = svc->createCharacteristic(kTxUUID, NIMBLE_PROPERTY::NOTIFY);
+  txChar = svc->createCharacteristic(UUIDs::TxChar, NIMBLE_PROPERTY::NOTIFY);
 
   // RX (writes from phone)
   auto* rxChar = svc->createCharacteristic(
-      kRxUUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
+      UUIDs::RxChar, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
   rxChar->setCallbacks(new RxCallbacks());
 
   svc->start();
 
   auto* adv = NimBLEDevice::getAdvertising();
-  adv->addServiceUUID(kSvcUUID);
+  adv->addServiceUUID(UUIDs::Service);
   adv->setScanResponse(true);
   adv->start();
 
@@ -132,7 +108,7 @@ void loop() {
     }
 
     Serial.println(line);
-    notifyMessage(line);   // now OK with the overloads above
+    notifyMessage(line, txChar);   // now OK with the overloads above
 
     irrecv.resume();
   }
