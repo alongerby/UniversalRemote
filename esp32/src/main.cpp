@@ -9,8 +9,12 @@
 
 #include <UUIDs.h>
 #include <ACCommands.h>
+#include <TvCodes.h>
+#include <TvDispatch.h>
+#include <TvCommands.h>
 
 using namespace ACCommands;
+using namespace TvCommands;
 
 // ----- IR pins -----
 const uint16_t kIrTxPin = 4;   // your TX module DAT pin
@@ -18,37 +22,40 @@ const uint16_t kIrRxPin = 21;  // receiver OUT pin
 
 // ----- IR objects -----
 IRGreeAC ac(kIrTxPin);
-IRrecv irrecv(kIrRxPin);
+IRsend tv(kIrTxPin);
+
+// IRrecv irrecv(kIrRxPin);
 decode_results results;
 
 // ----- BLE -----
 NimBLECharacteristic* txChar = nullptr;
 
-static void processCmd(const std::string &sraw) {
-  // normalize to uppercase ASCII without CR/LF
-  String s;
-  for (char c : sraw) if (c >= 32 && c <= 126) s += c;
-  s.trim();
-  s.toUpperCase();
-
-  if (s == "ON") {
-    ac.on();
-    sendState(ac, txChar);
-  } else if (s == "OFF") {
-    ac.off();
-    sendState(ac, txChar);
-  } else {
-    notifyMessage("Unknown. Use ON or OFF.", txChar);
-  }
-}
-
 struct RxCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* ch) override {
     std::string data = ch->getValue();
-    if (!data.empty() && txChar) {
-      notifyMessage("Received", txChar);
-      notifyMessage(data, txChar);
-      sendAcCmd(data, ac);
+    if (data.empty() || !txChar) return;
+
+    StaticJsonDocument<256> doc;
+    DeserializationError jsonErr = deserializeJson(doc, data.c_str());
+    if (jsonErr) {
+      notifyMessage(jsonErr.c_str(), txChar);
+      return;
+    }
+
+    JsonObjectConst obj = doc.as<JsonObjectConst>();
+    const char* type = obj["type"] | "";
+
+    if (strcmp(type, "AC") == 0) {
+      sendAcCmd(obj, ac);
+      notifyMessage("Sent AC", txChar);
+
+    } else if (strcmp(type, "TV") == 0) {
+      String err;
+      if (!sendTvFromJson(tv, obj, err)) {
+        notifyMessage(err.c_str(), txChar);
+      }else{
+        notifyMessage("Sent TV", txChar);
+      }
     }
   }
 };
@@ -57,16 +64,10 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
-  // ---- IR TX defaults ----
-  ac.begin();
-  ac.on();
-  ac.setMode(kGreeCool);
-  ac.setTemp(24);
-  ac.setFan(kGreeFanAuto);
-
-  // // ---- IR RX start ----
-  // irrecv.enableIRIn();   // start the receiver
-
+  // ---- Transmittor setup ----
+  setup(ac);
+  tv.begin();
+  
   // ---- BLE ----
   NimBLEDevice::init("ESP32-BLE-IR");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -93,25 +94,5 @@ void setup() {
 }
 
 void loop() {
-  // Poll the IR receiver and report concise info over BLE
-  // if (irrecv.decode(&results)) {
-  //   String protoStr = typeToString(results.decode_type); // Arduino String
-  //   char line[64];
 
-  //   if (results.bits <= 32) {
-  //     snprintf(line, sizeof(line), "RX %s 0x%08lX (%d)",
-  //             protoStr.c_str(),
-  //             (unsigned long)results.value,
-  //             results.bits);
-  //   } else {
-  //     snprintf(line, sizeof(line), "RX %s (%d bits)",
-  //             protoStr.c_str(),
-  //             results.bits);
-  //   }
-
-  //   Serial.println(line);
-  //   notifyMessage(line, txChar);   // now OK with the overloads above
-
-  //   irrecv.resume();
-  // }
 }

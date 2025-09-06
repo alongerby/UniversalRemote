@@ -29,6 +29,7 @@ struct ContentView: View {
                         onOn: { ble.sendMsg("ON") },
                         onOff: { ble.sendMsg("OFF") },
                         onSend: { msg in ble.sendMsg(msg, appendNewline: true) }
+                        
                     )
                 }
                 .listStyle(.insetGrouped)
@@ -41,6 +42,27 @@ struct ContentView: View {
 
 // MARK: - Sections / Components
 
+private enum OpenPanel {
+    case none, ac, tv
+}
+
+// MARK: - TV types
+private enum TVBrand: String, CaseIterable, Identifiable {
+    case lg, samsung
+    var id: Self { self }
+    var label: String { rawValue.uppercased() }
+    var jsonValue: String { rawValue.uppercased() }
+}
+private enum TVInput: String, CaseIterable, Identifiable {
+    case tv = "TV"
+    case hdmi1 = "HDMI1"
+    case hdmi2 = "HDMI2"
+    case av = "AV"
+    var id: Self { self }
+    var label: String { rawValue }
+}
+
+// MARK: - AC types
 private enum ACMode: Int, CaseIterable, Identifiable {
     case cool = 1
     case hot = 4
@@ -48,7 +70,7 @@ private enum ACMode: Int, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .cool: "Cool"
-        case .hot: "Hot"
+        case .hot:  "Hot"
         }
     }
     var intValue: Int { rawValue }
@@ -59,9 +81,7 @@ private enum ACFan: Int, CaseIterable, Identifiable {
     case min = 1
     case med = 2
     case max = 3
-
     var id: Self { self }
-
     var label: String {
         switch self {
         case .auto: "Auto"
@@ -70,37 +90,50 @@ private enum ACFan: Int, CaseIterable, Identifiable {
         case .max:  "Max"
         }
     }
-
     var intValue: Int { rawValue }
 }
 
+// MARK: - Combined AC + TV section
 private struct CommandsSection: View {
     @Binding var customMsg: String
     let onOn: () -> Void
     let onOff: () -> Void
     let onSend: (String) -> Void
+    
+    @State private var open: OpenPanel = .none
 
-    @State private var showAC = false
+    // AC state
     @State private var temp: Int = 24
     @State private var mode: ACMode = .cool
     @State private var fan: ACFan = .auto
 
+    // TV state
+    @State private var tvBrand: TVBrand = .lg
+    @State private var channelText: String = ""
+
     var body: some View {
         Section("Commands") {
-            // Power row
+            // Top row: quick power + expanders
             HStack(spacing: 8) {
                 Button {
-                    withAnimation { showAC.toggle() }
+                    withAnimation { open = (open == .ac ? .none : .ac) }
                 } label: {
-                    Label("AC", systemImage: showAC ? "chevron.down.circle.fill" : "chevron.right.circle")
+                    Label("AC", systemImage: open == .ac ? "chevron.down.circle.fill" : "chevron.right.circle")
                         .labelStyle(.titleAndIcon)
                 }
                 .buttonStyle(Primary())
-                .accessibilityLabel("Toggle AC options")
+
+                Button {
+                    withAnimation { open = (open == .tv ? .none : .tv) }
+                } label: {
+                    Label("TV", systemImage: open == .tv ? "chevron.down.circle.fill" : "chevron.right.circle")
+                        .labelStyle(.titleAndIcon)
+                }
+                .buttonStyle(Primary())
             }
 
-            // Collapsible AC panel (in place)
-            if showAC {
+            // ---- AC PANEL ----
+            if open == .ac {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Air Conditioner").font(.headline)
 
@@ -142,7 +175,7 @@ private struct CommandsSection: View {
                                 Text("Turn Off")
                             } icon: {
                                 Image(systemName: "power.circle.fill")
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(.red) // icon only
                             }
                         }
                         .buttonStyle(Primary())
@@ -159,11 +192,62 @@ private struct CommandsSection: View {
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
+
+            // ---- TV PANEL ----
+            if open == .tv {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Television").font(.headline)
+
+                    // Brand
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Brand", systemImage: "display")
+                        Picker("Brand", selection: $tvBrand) {
+                            ForEach(TVBrand.allCases) { b in Text(b.label).tag(b) }
+                        }
+                        .pickerStyle(.segmented)
+                    }
+
+                    // Quick actions grid
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ActionButton(title: "", systemImage: "power.circle.fill") { sendTV("POWER_TOGGLE") }
+                        ActionButton(title: "", systemImage: "speaker.slash.circle.fill") { sendTV("MUTE") }
+                        ActionButton(title: "", systemImage: "rectangle.connected.to.line.below") { sendTV("INPUT") }
+
+                        ActionButton(title: "Vol +", systemImage: "speaker.wave.3.fill") { sendTV("VOL_UP") }
+                        ActionButton(title: "Vol −", systemImage: "speaker.wave.1.fill") { sendTV("VOL_DOWN") }
+                        ActionButton(title: "OK", systemImage: "checkmark.circle.fill") { sendTV("OK") }
+
+                        ActionButton(title: "Chan +", systemImage: "arrow.up.circle.fill") { sendTV("CH_UP") }
+                        ActionButton(title: "Chan −", systemImage: "arrow.down.circle.fill") { sendTV("CH_DOWN") }
+                        ActionButton(title: "Back", systemImage: "arrow.uturn.left.circle.fill") { sendTV("BACK") }
+                    }
+
+                    // Channel set
+                    HStack(spacing: 8) {
+                        Label("Channel", systemImage: "number")
+                        TextField("e.g. 12", text: $channelText)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 90)
+                        Spacer()
+                        Button("Go") {
+                            if let ch = Int(channelText) { sendTV("CH_SET", extra: ["channel": ch]) }
+                        }
+                        .buttonStyle(Primary())
+                    }
+                }
+                .padding(10)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 
+    // ---- Send helpers ----
     private func sendAC() {
         let dict: [String: Any] = [
+            "type": "AC",
+            "company": "TADIRAN",
             "cmd": "ON",
             "temp_c": temp,
             "mode": mode.intValue,
@@ -173,6 +257,34 @@ private struct CommandsSection: View {
            let json = String(data: data, encoding: .utf8) {
             onSend(json + "\n")
         }
+    }
+
+    private func sendTV(_ cmd: String, extra: [String: Any] = [:]) {
+        var dict: [String: Any] = [
+            "type": "TV",
+            "company": tvBrand.jsonValue,
+            "cmd": cmd
+        ]
+        extra.forEach { dict[$0.key] = $0.value }
+
+        if let data = try? JSONSerialization.data(withJSONObject: dict),
+           let json = String(data: data, encoding: .utf8) {
+            onSend(json + "\n")
+        }
+    }
+}
+
+// Simple wide button used in TV grid
+private struct ActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack { Image(systemName: systemImage); Text(title) }
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(Secondary())
     }
 }
 

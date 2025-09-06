@@ -6,6 +6,14 @@
 
 
 namespace ACCommands {
+    void setup(IRGreeAC &ac){
+        ac.begin();
+        ac.on();
+        ac.setMode(kGreeCool);
+        ac.setTemp(24);
+        ac.setFan(kGreeFanAuto);
+    }
+
     void notifyMessage(const char* msg, NimBLECharacteristic *txChar) {
       if (!txChar) return;
         txChar->setValue((const uint8_t*)msg, strlen(msg)); // explicit length
@@ -48,20 +56,7 @@ namespace ACCommands {
       ac.setTemp(temp);
     }
 
-    void sendAcCmd(std::string data, IRGreeAC &ac){
-      if(data == "OFF"){
-        ac.off();
-        ac.send();
-        return;
-      }
-      JsonDocument doc;
-      DeserializationError err = deserializeJson(doc, data);
-      if (err) {
-        Serial.print("JSON parse failed: ");
-        Serial.println(err.c_str());
-        return;
-      }
-      JsonObjectConst obj = doc.as<JsonObjectConst>();
+    void sendAcCmd(JsonObjectConst obj, IRGreeAC &ac){
       buildAcCommand(ac, obj);
       ac.send();
     }

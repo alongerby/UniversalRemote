@@ -6,6 +6,9 @@
 #include <ArduinoJson.h>
 
 namespace ACCommands {
+
+  void setup(IRGreeAC &ac);
+
   // --- Notify helpers ---
   void notifyMessage(const char* msg, NimBLECharacteristic* txChar);
 
@@ -16,5 +19,5 @@ namespace ACCommands {
   // --- IR helpers ---
   void sendState(IRGreeAC& ac, NimBLECharacteristic *txChar);
   void buildAcCommand(IRGreeAC& ac, JsonObjectConst obj);
-  void sendAcCmd(std::string data, IRGreeAC &ac);
+  void sendAcCmd(JsonObjectConst data, IRGreeAC &ac);
 }
