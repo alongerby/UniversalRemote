@@ -25,6 +25,7 @@ IRGreeAC ac(kIrTxPin);
 IRsend tv(kIrTxPin);
 
 // IRrecv irrecv(kIrRxPin);
+IRrecv irrecv(kIrRxPin);
 decode_results results;
 
 // ----- BLE -----
@@ -55,6 +56,7 @@ struct RxCallbacks : public NimBLECharacteristicCallbacks {
         notifyMessage(err.c_str(), txChar);
       }else{
         notifyMessage("Sent TV", txChar);
+        notifyMessage(data, txChar);
       }
     }
   }
@@ -67,7 +69,11 @@ void setup() {
   // ---- Transmittor setup ----
   setup(ac);
   tv.begin();
-  
+
+  // ---- Reciever setup ----
+  irrecv.enableIRIn();
+  Serial.println("IR reciever ready");
+
   // ---- BLE ----
   NimBLEDevice::init("ESP32-BLE-IR");
   NimBLEDevice::setPower(ESP_PWR_LVL_P9);
@@ -94,5 +100,8 @@ void setup() {
 }
 
 void loop() {
-
+  if(irrecv.decode(&results)){
+    Serial.println(resultToHumanReadableBasic(&results));
+    irrecv.resume();
+  }
 }

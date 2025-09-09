@@ -8,23 +8,32 @@
 namespace TvCommands{
     bool sendTvFromJson(IRsend& ir, JsonObjectConst obj, String& err) {
         String type = obj["type"]    | "";
-        String brand= obj["company"] | "";
-        const char* codeStr = obj["code"] | nullptr;
-        uint16_t bits = obj["bits"] | 0;  
+        String brand = obj["brand"] | "";
+        String cmd = obj["cmd"] | "";
+        int8_t bits = 0; 
 
         type.toUpperCase();
         brand.toUpperCase();
 
-        if (type != "TV") { err = "type!=TV"; return false; }
-        if (!codeStr)     { err = "missing code"; return false; }
-
-        uint64_t code = strtoull(codeStr, nullptr, 0); // base 0 handles 0x prefix
+        if (type != "TV") {
+            err = "type!=TV";
+            return false;
+        }
 
         const TvProtocol* proto = lookupTvProtocol(brand);
-        if (!proto) { err = "unknown company"; return false; }
+        if (!proto) { 
+            err = "unknown company";
+            return false;
+        }
+
+        auto itCmd = proto->codes.commands.find(cmd.c_str());
+        if (itCmd == proto->codes.commands.end()) {
+            err = "Unknown command";
+            return false;
+        }
 
         if (bits == 0) bits = proto->default_bits;
-        proto->send(ir, code, bits);
+        proto->send(ir, itCmd->second, bits);
         return true;
     }
 }

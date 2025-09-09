@@ -17,22 +17,23 @@ struct ContentView: View {
                     onDisconnect: { ble.disconnect() }
                 )
 
-                List {
-                    DevicesSection(
-                        devices: ble.devices,
-                        connectedId: ble.connected?.identifier,
-                        onConnect: ble.connect
-                    )
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        DevicesSectionContainer(
+                            devices: ble.devices,
+                            connectedId: ble.connected?.identifier,
+                            onConnect: ble.connect
+                        )
 
-                    CommandsSection(
-                        customMsg: $customMsg,
-                        onOn: { ble.sendMsg("ON") },
-                        onOff: { ble.sendMsg("OFF") },
-                        onSend: { msg in ble.sendMsg(msg, appendNewline: true) }
-                        
-                    )
+                        CommandsSectionContainer(
+                            customMsg: $customMsg,
+                            onOn: { ble.sendMsg("ON") },
+                            onOff: { ble.sendMsg("{type:'AC', cmd:'OFF'}") },
+                            onSend: { msg in ble.sendMsg(msg, appendNewline: true) }
+                        )
+                    }
+                    .padding(.vertical, 8)
                 }
-                .listStyle(.insetGrouped)
             }
             .padding(.horizontal, 8)
             .navigationTitle("ESP32 Remote")
@@ -175,7 +176,7 @@ private struct CommandsSection: View {
                                 Text("Turn Off")
                             } icon: {
                                 Image(systemName: "power.circle.fill")
-                                    .foregroundStyle(.red) // icon only
+                                    .foregroundStyle(.red)
                             }
                         }
                         .buttonStyle(Primary())
@@ -217,8 +218,8 @@ private struct CommandsSection: View {
                         ActionButton(title: "Vol −", systemImage: "speaker.wave.1.fill") { sendTV("VOL_DOWN") }
                         ActionButton(title: "OK", systemImage: "checkmark.circle.fill") { sendTV("OK") }
 
-                        ActionButton(title: "Chan +", systemImage: "arrow.up.circle.fill") { sendTV("CH_UP") }
-                        ActionButton(title: "Chan −", systemImage: "arrow.down.circle.fill") { sendTV("CH_DOWN") }
+                        ActionButton(title: "HDMI 1", systemImage: "arrow.up.circle.fill") { sendTV("HDMI_1") }
+                        ActionButton(title: "HDMI 2", systemImage: "arrow.down.circle.fill") { sendTV("HDMI_2") }
                         ActionButton(title: "Back", systemImage: "arrow.uturn.left.circle.fill") { sendTV("BACK") }
                     }
 
@@ -247,7 +248,7 @@ private struct CommandsSection: View {
     private func sendAC() {
         let dict: [String: Any] = [
             "type": "AC",
-            "company": "TADIRAN",
+            "brand": "TADIRAN",
             "cmd": "ON",
             "temp_c": temp,
             "mode": mode.intValue,
@@ -262,7 +263,7 @@ private struct CommandsSection: View {
     private func sendTV(_ cmd: String, extra: [String: Any] = [:]) {
         var dict: [String: Any] = [
             "type": "TV",
-            "company": tvBrand.jsonValue,
+            "brand": tvBrand.jsonValue,
             "cmd": cmd
         ]
         extra.forEach { dict[$0.key] = $0.value }
@@ -378,3 +379,67 @@ private struct Destructive: ButtonStyle {
             .foregroundStyle(.white)
     }
 }
+
+private struct SectionHeader: View {
+    let title: String
+    var body: some View {
+        Text(title)
+            .font(.headline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.top, 4)
+    }
+}
+
+private struct DevicesSectionContainer: View {
+    let devices: [CBPeripheral]
+    let connectedId: UUID?
+    let onConnect: (CBPeripheral) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "Devices")
+            VStack(spacing: 0) {
+                ForEach(devices, id: \.identifier) { p in
+                    Button { onConnect(p) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name ?? "Unnamed").fontWeight(.medium)
+                                Text("\(p.identifier.uuidString.prefix(8))…")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if p.identifier == connectedId {
+                                Image(systemName: "link.circle.fill").foregroundStyle(.green)
+                            } else {
+                                Image(systemName: "link").foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
+                    }
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+            }
+        }
+    }
+}
+
+private struct CommandsSectionContainer: View {
+    @Binding var customMsg: String
+    let onOn: () -> Void
+    let onOff: () -> Void
+    let onSend: (String) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHeader(title: "Commands")
+            // reuse your combined CommandsSection but without Section{ }
+            CommandsSection(customMsg: $customMsg, onOn: onOn, onOff: onOff, onSend: onSend)
+                .padding(10)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+}
+
