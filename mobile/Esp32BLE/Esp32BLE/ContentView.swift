@@ -208,34 +208,51 @@ private struct CommandsSection: View {
                         .pickerStyle(.segmented)
                     }
 
-                    // Quick actions grid
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                        ActionButton(title: "", systemImage: "power.circle.fill") { sendTV("POWER_TOGGLE") }
-                        ActionButton(title: "", systemImage: "speaker.slash.circle.fill") { sendTV("MUTE") }
-                        ActionButton(title: "", systemImage: "rectangle.connected.to.line.below") { sendTV("INPUT") }
-
-                        ActionButton(title: "Vol +", systemImage: "speaker.wave.3.fill") { sendTV("VOL_UP") }
-                        ActionButton(title: "Vol −", systemImage: "speaker.wave.1.fill") { sendTV("VOL_DOWN") }
-                        ActionButton(title: "OK", systemImage: "checkmark.circle.fill") { sendTV("OK") }
-
-                        ActionButton(title: "HDMI 1", systemImage: "arrow.up.circle.fill") { sendTV("HDMI_1") }
-                        ActionButton(title: "HDMI 2", systemImage: "arrow.down.circle.fill") { sendTV("HDMI_2") }
-                        ActionButton(title: "Back", systemImage: "arrow.uturn.left.circle.fill") { sendTV("BACK") }
-                    }
-
-                    // Channel set
-                    HStack(spacing: 8) {
-                        Label("Channel", systemImage: "number")
-                        TextField("e.g. 12", text: $channelText)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 90)
-                        Spacer()
-                        Button("Go") {
-                            if let ch = Int(channelText) { sendTV("CH_SET", extra: ["channel": ch]) }
+                    // Quick actions (consistent single-line buttons)
+                    VStack(spacing: 8) {
+                        HStack(spacing: 8) {
+                            ActionButton(title: "Power", systemImage: "power.circle.fill") { sendTV("POWER_TOGGLE") }
+                            ActionButton(title: "Mute",  systemImage: "speaker.slash.circle.fill") { sendTV("MUTE") }
+                            ActionButton(title: "Back",  systemImage: "arrow.uturn.left.circle.fill") { sendTV("BACK") }
                         }
-                        .buttonStyle(Primary())
+                        HStack(spacing: 8) {
+                            ActionButton(title: "Input", systemImage: "rectangle.connected.to.line.below") { sendTV("INPUT") }
+                            ActionButton(title: "HDMI 1", systemImage: "h.square.fill.on.square.fill") { sendTV("HDMI_1") }
+                            ActionButton(title: "HDMI 2", systemImage: "h.square.fill.on.square.fill") { sendTV("HDMI_2") }
+                        }
+                        HStack(spacing: 8) {
+                            ActionButton(title: "Vol +", systemImage: "speaker.wave.3.fill") { sendTV("VOL_UP") }
+                            ActionButton(title: "Vol −", systemImage: "speaker.wave.1.fill") { sendTV("VOL_DOWN") }
+                            ActionButton(title: "Chan +", systemImage: "arrow.up.circle.fill") { sendTV("CH_UP") }
+                        }
+                        HStack(spacing: 8) {
+                            ActionButton(title: "Chan −", systemImage: "arrow.down.circle.fill") { sendTV("CH_DOWN") }
+                            Spacer(minLength: 0)
+                        }
                     }
+                    
+                    // D-Pad around OK
+                    RemoteDPad(
+                        onUp:    { sendTV("NAV_UP") },
+                        onDown:  { sendTV("NAV_DOWN") },
+                        onLeft:  { sendTV("NAV_LEFT") },
+                        onRight: { sendTV("NAV_RIGHT") },
+                        onOK:    { sendTV("OK") }
+                    )
+                    
+                    // Channel set
+//                    HStack(spacing: 8) {
+//                        Label("Channel", systemImage: "number")
+//                        TextField("e.g. 12", text: $channelText)
+//                            .keyboardType(.numberPad)
+//                            .textFieldStyle(.roundedBorder)
+//                            .frame(width: 90)
+//                        Spacer()
+//                        Button("Go") {
+//                            if let ch = Int(channelText) { sendTV("CH_SET", extra: ["channel": ch]) }
+//                        }
+//                        .buttonStyle(Primary())
+//                    }
                 }
                 .padding(10)
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -274,21 +291,6 @@ private struct CommandsSection: View {
         }
     }
 }
-
-// Simple wide button used in TV grid
-private struct ActionButton: View {
-    let title: String
-    let systemImage: String
-    let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            HStack { Image(systemName: systemImage); Text(title) }
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(Secondary())
-    }
-}
-
 
 private struct ControlsBar: View {
     let isConnected: Bool
@@ -434,7 +436,7 @@ private struct CommandsSectionContainer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(title: "Commands")
+            SectionHeader(title: "")
             // reuse your combined CommandsSection but without Section{ }
             CommandsSection(customMsg: $customMsg, onOn: onOn, onOff: onOff, onSend: onSend)
                 .padding(10)
@@ -443,3 +445,60 @@ private struct CommandsSectionContainer: View {
     }
 }
 
+// Round icon buttons for the D-pad
+private struct RoundIconButton: View {
+    let systemImage: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .buttonStyle(Secondary())
+    }
+}
+
+// 3×3 D-pad with OK in the center
+private struct RemoteDPad: View {
+    let onUp: () -> Void
+    let onDown: () -> Void
+    let onLeft: () -> Void
+    let onRight: () -> Void
+    let onOK: () -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack { Spacer(); RoundIconButton(systemImage: "chevron.up.circle.fill", action: onUp); Spacer() }
+            HStack(spacing: 8) {
+                RoundIconButton(systemImage: "chevron.left.circle.fill", action: onLeft)
+                Button(action: onOK) {
+                    Text("OK").fontWeight(.semibold)
+                        .frame(width: 64, height: 64)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .buttonStyle(Secondary())
+                RoundIconButton(systemImage: "chevron.right.circle.fill", action: onRight)
+            }
+            HStack { Spacer(); RoundIconButton(systemImage: "chevron.down.circle.fill", action: onDown); Spacer() }
+        }
+    }
+}
+
+// Single-line action button (icon + text, same row)
+private struct ActionButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                Text(title).lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(Secondary())
+    }
+}

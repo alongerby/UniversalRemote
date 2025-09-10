@@ -26,14 +26,20 @@ namespace TvCommands{
             return false;
         }
 
-        auto itCmd = proto->codes.commands.find(cmd.c_str());
-        if (itCmd == proto->codes.commands.end()) {
+        const TvBrand *b = findBrand(brand.c_str());
+        if (!b){
+            err = "brand meta missing";
+            return false;
+        }
+
+        const TvCmd *c = findCmd(b, cmd.c_str());
+        if (!c){
             err = "Unknown command";
             return false;
         }
 
-        if (bits == 0) bits = proto->default_bits;
-        proto->send(ir, itCmd->second, bits);
+        if (bits == 0) bits = b->bits;
+        proto->send(ir, c->code, bits);
         return true;
     }
 }

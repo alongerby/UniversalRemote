@@ -1,0 +1,5 @@
+TO ADD NEW BRAND:
+1) on TvCodes.h add the TvCmd object with the codes
+2) on TvDispatch.h add a function for the send and add the the kTvProtocols
+
+AC NOT SUPPORTED ANOTHER ONE YET!

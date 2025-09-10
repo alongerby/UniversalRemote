@@ -7,21 +7,22 @@
 using TvSendFn = void (*)(IRsend& ir, uint64_t code, uint16_t nbits);
 
 // Brand wrappers 
-inline void send_lg(IRsend& ir, uint64_t code, uint16_t nbits)     { ir.sendNEC(code, nbits ? nbits : 32); }
+inline void send_lg(IRsend& ir, uint64_t code, uint16_t nbits){
+  ir.sendLG(code, nbits ? nbits : 32);
+}
+
 struct TvProtocol {
   const char* brand;   // "LG", "SAMSUNG", "SONY"
   TvSendFn    send;   // function pointer
-  TvCodes codes;
-  uint16_t    default_bits;
 };
 
 static const TvProtocol kTvProtocols[] = {
-  { "LG", &send_lg, LgTv, 32 },
+  { "LG", &send_lg },
 };
 
-inline const TvProtocol* lookupTvProtocol(const String& companyUpper) {
+inline const TvProtocol* lookupTvProtocol(const String& brand) {
   for (auto& p : kTvProtocols) {
-    if (companyUpper.equalsIgnoreCase(p.brand)) return &p;
+    if (brand.equalsIgnoreCase(p.brand)) return &p;
   }
   return nullptr;
 }
