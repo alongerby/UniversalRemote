@@ -12,6 +12,8 @@
 #include <TvCodes.h>
 #include <TvDispatch.h>
 #include <TvCommands.h>
+#include <CustomCommands.h>
+#include <BLE.h>
 
 using namespace ACCommands;
 using namespace TvCommands;
@@ -21,7 +23,7 @@ const uint16_t kIrTxPin = 4;   // your TX module DAT pin
 const uint16_t kIrRxPin = 21;  // receiver OUT pin
 
 // ----- IR objects -----
-IRGreeAC ac(kIrTxPin);
+IRGreeAC ac(kIrTxPin); // TODO: Change to more a general idea for all ac's
 IRsend tv(kIrTxPin);
 
 // IRrecv irrecv(kIrRxPin);
@@ -66,6 +68,11 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
+  // File system setup
+  if(!initFS()){
+    Serial.println("Fs failed");
+  }
+
   // ---- Transmittor setup ----
   setup(ac);
   tv.begin();
@@ -101,7 +108,7 @@ void setup() {
 
 void loop() {
   if(irrecv.decode(&results)){
-    Serial.println(resultToHumanReadableBasic(&results));
+    notifyMessage(resultToHumanReadableBasic(&results), txChar);
     irrecv.resume();
   }
 }
