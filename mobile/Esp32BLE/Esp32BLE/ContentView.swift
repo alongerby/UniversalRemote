@@ -226,6 +226,8 @@ private struct CommandsSection: View {
                             ActionButton(title: "Chan +", systemImage: "arrow.up.circle.fill") { sendTV("CH_UP") }
                         }
                         HStack(spacing: 8) {
+                            ActionButton(title: "Netflix", systemImage: "popcorn") { sendTV("NETFLIX") }
+                            ActionButton(title: "Amazon", systemImage: "movieclapper.fill") { sendTV("AMAZON") }
                             ActionButton(title: "Chan −", systemImage: "arrow.down.circle.fill") { sendTV("CH_DOWN") }
                             Spacer(minLength: 0)
                         }

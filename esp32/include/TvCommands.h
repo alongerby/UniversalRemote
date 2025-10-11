@@ -6,7 +6,8 @@
 #include <ir_LG.h>
 #include <TvCodes.h>
 #include <TvDispatch.h>
+#include <TvPending.h>
 
 namespace TvCommands{
-    bool sendTvFromJson(IRsend& ir, JsonObjectConst obj, String& err);
+    bool sendTvFromJson(TvPending &out, JsonObjectConst obj, String& err);
 }

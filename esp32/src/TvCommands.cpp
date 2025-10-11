@@ -4,9 +4,10 @@
 #include <ir_LG.h>
 #include <TvCodes.h>
 #include <TvDispatch.h>
+#include <TvPending.h>
 
 namespace TvCommands{
-    bool sendTvFromJson(IRsend& ir, JsonObjectConst obj, String& err) {
+    bool sendTvFromJson(TvPending &out, JsonObjectConst obj, String& err) {
         String type = obj["type"]    | "";
         String brand = obj["brand"] | "";
         String cmd = obj["cmd"] | "";
@@ -39,7 +40,11 @@ namespace TvCommands{
         }
 
         if (bits == 0) bits = b->bits;
-        proto->send(ir, c->code, bits);
+        
+        out.proto = proto;
+        out.code = c->code;
+        out.bits = b->bits;
+
         return true;
     }
 }

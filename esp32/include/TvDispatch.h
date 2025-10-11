@@ -8,7 +8,7 @@ using TvSendFn = void (*)(IRsend& ir, uint64_t code, uint16_t nbits);
 
 // Brand wrappers 
 inline void send_lg(IRsend& ir, uint64_t code, uint16_t nbits){
-  ir.sendLG(code, nbits ? nbits : 32);
+  ir.sendNEC(code, 32);
 }
 
 struct TvProtocol {

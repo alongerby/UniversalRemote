@@ -17,6 +17,12 @@ constexpr TvCmd LG_CMDS[] = {
         { "HDMI_1",       0x20DF738C },
         { "HDMI_2",       0x20DF33CC },
         { "HDMI_3",       0x20DF9768 },
+        { "NAV_UP",       0x20DF02FD },
+        { "NAV_DOWN",     0x20DF827D },
+        { "NAV_RIGHT",    0x20DF609F },
+        { "NAV_LEFT",     0x20DFE01F },
+        { "NETFLIX",      0x20DF6A95 },
+        { "AMAZON",       0x20DF3AC5 },
 };
 
 // LG TV IR codes (32-bit NEC protocol)
@@ -41,26 +47,3 @@ inline const TvCmd* findCmd(const TvBrand *brand, const char *key){
     }
     return nullptr;
 }
-
-// constexpr TvCodes LgTv {
-//     "LG",
-//     32,
-//     {
-//         { "POWER_TOGGLE", 0x20DF10EF },
-//         { "VOL_UP",       0x20DF40BF },
-//         { "VOL_DOWN",     0x20DFC03F },
-//         { "MUTE",         0x20DF906F },
-//         { "CH_UP",        0x20DF00FF },
-//         { "CH_DOWN",      0x20DF807F },
-//         { "INPUT",        0x20DFD02F },
-//         { "OK",           0x20DF22DD },
-//         { "BACK",         0x20DF14EB },
-//         { "HDMI_1",       0x20DF738C },
-//         { "HDMI_2",       0x20DF33CC },
-//         { "HDMI_3",       0x20DF9768 },
-//     }
-// };
-
-// const std::map<std::string, const TvCodes*> tvMap = {
-//     { "LG", &LgTv }
-// };

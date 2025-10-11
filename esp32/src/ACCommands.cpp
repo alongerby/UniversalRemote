@@ -4,6 +4,7 @@
 #include "ACCommands.h"
 #include <ArduinoJson.h>
 
+const u_int8_t REPEAT = 1;
 
 namespace ACCommands {
     void setup(IRGreeAC &ac){
@@ -24,6 +25,7 @@ namespace ACCommands {
       }
       else if(cmd == "OFF"){
         ac.off();
+        return;
       }
       // MODE
       const u_int8_t mode = obj["mode"] | kGreeAuto;
@@ -37,11 +39,5 @@ namespace ACCommands {
       temp = std::min(temp, kGreeMaxTempC);
       ac.setTemp(temp);
     }
-
-    void sendAcCmd(JsonObjectConst obj, IRGreeAC &ac){
-      buildAcCommand(ac, obj);
-      ac.send();
-    }
-    
-
+  
 }
