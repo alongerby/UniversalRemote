@@ -16,6 +16,7 @@
 #include <CustomCommands.h>
 #include <BLE.h>
 #include <TvPending.h>
+#include <BleKeyboard.h>
 
 using namespace ACCommands;
 using namespace TvCommands;
@@ -39,6 +40,7 @@ decode_results results;
 
 // ----- BLE -----
 NimBLECharacteristic* txChar = nullptr;
+BleKeyboard ble("Universal Remote CC");
 
 struct RxCallbacks : public NimBLECharacteristicCallbacks {
   void onWrite(NimBLECharacteristic* ch) override {
@@ -70,18 +72,15 @@ struct RxCallbacks : public NimBLECharacteristicCallbacks {
     }
   }
 };
-// #include <BleKeyboard.h>
 
-// BleKeyboard ble("ESP32 Remote");
+void setup() {
+    Serial.begin(115200);
+    ble.begin();
+}
 
-// void setup() {
-//     Serial.begin(115200);
-//     ble.begin();
-// }
-
-// void loop() {
-//     if (ble.isConnected()) {
-//         ble.sendConsumerRaw(0x43);
-//         delay(2000);
-//     }
-// }
+void loop() {
+    if (ble.isConnected()) {
+        ble.sendConsumerRaw(0x43);
+        delay(2000);
+    }
+}
